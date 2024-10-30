@@ -2,9 +2,6 @@ import re
 import argparse
 from tabulate import tabulate
 from colorama import Fore, Style, init
-from openpyxl import Workbook
-from openpyxl.chart import BarChart, Reference
-
 
 init()
 
@@ -196,175 +193,100 @@ def extract_cpu_statistics(file_path, active_cpu):
     return stats
 
 
-def save_to_excel(stats_list, file_labels, category, rows_general, rows_ipc_cpi=None, headers_general=None,
-                  headers_ipc_cpi=None):
-
-    wb = Workbook()
-
-    ws_general = wb.active
-    ws_general.title = f"{category}_general"
-    ws_general.append(headers_general)
-
-    for row in rows_general:
-        ws_general.append(row)
-
-    for row_idx, row_data in enumerate(rows_general, start=2):
-        chart = BarChart()
-        data = Reference(ws_general, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-        categories = Reference(ws_general, min_col=1, min_row=row_idx, max_row=row_idx)
-        chart.add_data(data, titles_from_data=False)
-        chart.set_categories(categories)
-        chart.title = f"{row_data[0]} Statistics"
-        ws_general.add_chart(chart, f"E{row_idx * 5}")
-
-    if rows_ipc_cpi and headers_ipc_cpi:
-        ws_ipc_cpi = wb.create_sheet(title=f"{category}_ipc_cpi")
-        ws_ipc_cpi.append(headers_ipc_cpi)
-
-        for row in rows_ipc_cpi:
-            ws_ipc_cpi.append(row)
-
-        for row_idx, row_data in enumerate(rows_ipc_cpi, start=2):
-            chart = BarChart()
-            data = Reference(ws_ipc_cpi, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-            categories = Reference(ws_ipc_cpi, min_col=1, min_row=row_idx, max_row=row_idx)
-            chart.add_data(data, titles_from_data=False)
-            chart.set_categories(categories)
-            chart.title = f"{row_data[0]} Statistics"
-            ws_ipc_cpi.add_chart(chart, f"E{row_idx * 5}")
-
-    wb.save(f"{category}_statistics.xlsx")
-
-
-def display_statistics(stats_list, file_labels, category):
-    headers = ["Metric"] + file_labels
-    rows = []
-
+def display_statistics(stats, category):
     if category == "cpu":
-        rows_general = [
-            ["Cycles"] + [stats.get('numCycles', 'N/A') for stats in stats_list],
-            ["Instructions Issued"] + [stats.get('instsIssued', 'N/A') for stats in stats_list],
-            ["Instructions Committed"] + [stats.get('committedInsts', 'N/A') for stats in stats_list]
+        print("\nCPU Statistics:")
+        cpu_stats = [
+            ["Cycles", stats.get('numCycles', 'N/A')],
+            ["Instructions Issued", stats.get('instsIssued', 'N/A')],
+            ["Instructions Committed", stats.get('committedInsts', 'N/A')],
+            ["CPI", stats.get('cpi', 'N/A')],
+            ["IPC", stats.get('ipc', 'N/A')]
         ]
-
-        rows_ipc_cpi = [
-            ["CPI"] + [stats.get('cpi', 'N/A') for stats in stats_list],
-            ["IPC"] + [stats.get('ipc', 'N/A') for stats in stats_list]
-        ]
-
-        headers_general = ["Metric"] + file_labels
-        headers_ipc_cpi = ["Metric"] + file_labels
-        print("\nGeneral CPU Statistics:")
-        print(tabulate(rows_general, headers=headers_general, tablefmt="grid"))
-
-        print("\nIPC and CPI Statistics:")
-        print(tabulate(rows_ipc_cpi, headers=headers_ipc_cpi, tablefmt="grid"))
-
-        save_to_excel(stats_list, file_labels, category, rows_general, rows_ipc_cpi, headers_general, headers_ipc_cpi)
+        print(tabulate(cpu_stats, headers=["Metric", "Value"], tablefmt="grid"))
 
     elif category == "lsq":
-        rows = [
-            ["Forwarded Loads"] + [stats.get('lsq_forw_loads', 'N/A') for stats in stats_list],
-            ["Squashed Loads"] + [stats.get('lsq_squashed_loads', 'N/A') for stats in stats_list],
-            ["Squashed Stores"] + [stats.get('lsq_squashed_stores', 'N/A') for stats in stats_list],
-            ["Ignored Responses"] + [stats.get('lsq_ignored_responses', 'N/A') for stats in stats_list],
-            ["Memory Order Violations"] + [stats.get('lsq_mem_order_violations', 'N/A') for stats in stats_list],
-            ["Rescheduled Loads"] + [stats.get('lsq_rescheduled_loads', 'N/A') for stats in stats_list],
-            ["Blocked By Cache"] + [stats.get('lsq_blocked_by_cache', 'N/A') for stats in stats_list],
+        print("\nLoad/Store Queue Statistics:")
+        lsq_stats = [
+            ["Forwarded Loads", stats.get('lsq_forw_loads', 'N/A')],
+            ["Squashed Loads", stats.get('lsq_squashed_loads', 'N/A')],
+            ["Squashed Stores", stats.get('lsq_squashed_stores', 'N/A')],
+            ["Ignored Responses", stats.get('lsq_ignored_responses', 'N/A')],
+            ["Memory Order Violations", stats.get('lsq_mem_order_violations', 'N/A')],
+            ["Rescheduled Loads", stats.get('lsq_rescheduled_loads', 'N/A')],
+            ["Blocked By Cache", stats.get('lsq_blocked_by_cache', 'N/A')]
         ]
-        print(tabulate(rows, headers=headers, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, rows, [], headers, [])
+        print(tabulate(lsq_stats, headers=["Metric", "Value"], tablefmt="grid"))
 
     elif category == "fu":
-        headers_fu = ["Functional Unit"] + file_labels
-        rows = []
-        for fu_type in stats_list[0].get('FU_Busy', {}):
-            row = [fu_type] + [stats.get('FU_Busy', {}).get(fu_type, {}).get('count', 'N/A') for stats in stats_list]
-            rows.append(row)
-        print(tabulate(rows, headers=headers_fu, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, rows, [], headers_fu, [])
+        print("\nFunctional Unit Busy Stats:")
+        fu_stats = [[fu_type, f"{Fore.GREEN}{fu_data['count']}{Style.RESET_ALL}" if fu_data[
+                                                                                        'count'] != 0 else f"{Fore.RED}{fu_data['count']}{Style.RESET_ALL}",
+                     f"{fu_data['rate']}%"] for fu_type, fu_data in stats.get('FU_Busy', {}).items()]
+        print(tabulate(fu_stats, headers=["Functional Unit", "Busy Count", "Busy Rate"], tablefmt="grid"))
 
     elif category == "cache":
-        rows = [
-            ["Cache Hits"] + [stats.get('cache_hits', 'N/A') for stats in stats_list],
-            ["Cache Misses"] + [stats.get('cache_misses', 'N/A') for stats in stats_list],
-            ["Cache Miss Rate"] + [stats.get('cache_miss_rate', 'N/A') for stats in stats_list],
-            ["Cache Miss Latency"] + [stats.get('cache_miss_latency', 'N/A') for stats in stats_list],
+        print("\nCache Stats:")
+        cache_stats = [
+            ["Cache Hits", stats.get('cache_hits', 'N/A')],
+            ["Cache Misses", stats.get('cache_misses', 'N/A')],
+            ["Cache Miss Rate", stats.get('cache_miss_rate', 'N/A')],
+            ["Cache Miss Latency", stats.get('cache_miss_latency', 'N/A')]
         ]
-        print(tabulate(rows, headers=headers, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, rows, [], headers, [])
+        print(tabulate(cache_stats, headers=["Metric", "Value"], tablefmt="grid"))
 
     elif category == "bp":
-        rows = [
-            ["BTB Lookups"] + [stats.get('btb_lookups', 'N/A') for stats in stats_list],
-            ["BTB Hits"] + [stats.get('btb_hits', 'N/A') for stats in stats_list],
-            ["BTB Hit Ratio"] + [stats.get('btb_hit_ratio', 'N/A') for stats in stats_list],
+        print("\nBranch Prediction Stats:")
+        branch_pred_stats = [
+            ["BTB Lookups", stats.get('btb_lookups', 'N/A')],
+            ["BTB Hits", stats.get('btb_hits', 'N/A')],
+            ["BTB Hit Ratio", stats.get('btb_hit_ratio', 'N/A')]
         ]
-        print(tabulate(rows, headers=headers, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, rows, [], headers, [])
+        print(tabulate(branch_pred_stats, headers=["Metric", "Value"], tablefmt="grid"))
 
     elif category == "mem_ctrl":
-        mem_ctrl_table = []
-        for idx, stats in enumerate(stats_list, start=1):
-            for mem_ctrl_id, mem_ctrl in stats['mem_ctrl_data'].items():
-                mem_ctrl_table.append([
-                    f"Memory Controller {mem_ctrl_id}",
-                    mem_ctrl.get('bw_read', 'N/A'),
-                    mem_ctrl.get('bw_write', 'N/A'),
-                    mem_ctrl.get('read_bursts', 'N/A'),
-                    mem_ctrl.get('write_bursts', 'N/A')
-                ])
-        headers_mem_ctrl = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)", "Read Bursts", "Write Bursts"]
-        print(tabulate(mem_ctrl_table, headers=headers_mem_ctrl, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, mem_ctrl_table, [], headers_mem_ctrl, [])
+        print("\nMemory Controller Stats:")
+        mem_ctrl_stats_1 = [
+            ["Read Bandwidth (Bytes/s)", stats['mem_ctrl_data'].get('0', {}).get('bw_read', 'N/A')],
+            ["Write Bandwidth (Bytes/s)", stats['mem_ctrl_data'].get('0', {}).get('bw_write', 'N/A')],
+            ["Read Bursts", stats['mem_ctrl_data'].get('0', {}).get('read_bursts', 'N/A')],
+            ["Write Bursts", stats['mem_ctrl_data'].get('0', {}).get('write_bursts', 'N/A')]
+        ]
+        print(tabulate(mem_ctrl_stats_1, headers=["Metric", "Value"], tablefmt="grid"))
 
     elif category == "mem_ctrl_balance":
-        mem_ctrl_balance_table = []
-        for idx, stats in enumerate(stats_list, start=1):
-            for mem_ctrl_id, mem_ctrl in stats['mem_ctrl_data'].items():
-                mem_ctrl_balance_table.append([
-                    f"Memory Controller {mem_ctrl_id}",
-                    mem_ctrl.get('bw_read', 'N/A'),
-                    mem_ctrl.get('bw_write', 'N/A'),
-                    mem_ctrl.get('read_bursts', 'N/A'),
-                    mem_ctrl.get('write_bursts', 'N/A'),
-                    mem_ctrl.get('queue_latency', 'N/A'),
-                    mem_ctrl.get('accesses', 'N/A'),
-                    f"{mem_ctrl.get('read_share', 0):.2f}%",
-                    f"{mem_ctrl.get('write_share', 0):.2f}%"
-                ])
-        headers_mem_ctrl_balance = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)", "Read Bursts",
-                                    "Write Bursts", "Queue Latency", "Total Accesses", "Read % Share", "Write % Share"]
-        print(tabulate(mem_ctrl_balance_table, headers=headers_mem_ctrl_balance, tablefmt="grid"))
-        save_to_excel(stats_list, file_labels, category, mem_ctrl_balance_table, [], headers_mem_ctrl_balance, [])
-
+        print("\nMemory Controller Balance Stats:")
+        mem_ctrl_headers = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)", "Read Bursts",
+                            "Write Bursts", "Queue Latency", "Total Accesses", "Read % Share", "Write % Share"]
+        mem_ctrl_table = []
+        for mem_ctrl_id, mem_ctrl in stats['mem_ctrl_data'].items():
+            mem_ctrl_table.append([
+                f"Memory Controller {mem_ctrl_id}",
+                mem_ctrl.get('bw_read', 'N/A'),
+                mem_ctrl.get('bw_write', 'N/A'),
+                mem_ctrl.get('read_bursts', 'N/A'),
+                mem_ctrl.get('write_bursts', 'N/A'),
+                mem_ctrl.get('queue_latency', 'N/A'),
+                mem_ctrl.get('accesses', 'N/A'),
+                f"{mem_ctrl.get('read_share', 0):.2f}%",
+                f"{mem_ctrl.get('write_share', 0):.2f}%"
+            ])
+        print(tabulate(mem_ctrl_table, headers=mem_ctrl_headers, tablefmt="grid"))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract and display specific statistics from gem5 stat files.")
-    parser.add_argument("file_paths", nargs='+', help="Paths to the stat files (up to 3)", metavar="FILE")
+    parser = argparse.ArgumentParser(description="Extract and display specific statistics from the gem5 stat file.")
+    parser.add_argument("file_path", help="Path to the stat file")
     parser.add_argument("--category", choices=["cpu", "lsq", "fu", "cache", "bp", "mem_ctrl", "mem_ctrl_balance"],
                         required=True, help="Category of statistics to display")
 
     args = parser.parse_args()
 
-    if len(args.file_paths) > 3:
-        print("Please provide up to 3 stat files for comparison.")
-        return
+    active_cpu = find_active_cpu(args.file_path)
+    stats = extract_cpu_statistics(args.file_path, active_cpu)
 
-    stats_list = []
-    file_labels = []
-    for file_path in args.file_paths:
-        active_cpu = find_active_cpu(file_path)
-        stats = extract_cpu_statistics(file_path, active_cpu)
-        stats_list.append(stats)
-        file_labels.append(file_path.split('/')[-1])
-
-    display_statistics(stats_list, file_labels, args.category)
+    display_statistics(stats, args.category)
 
 
 if __name__ == "__main__":
     main()
-
-
-
