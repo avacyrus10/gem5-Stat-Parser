@@ -34,11 +34,9 @@ The Makefile provides a convenient way to run the script and display specific st
 
 ### Running the Makefile
 
-To run the script for a specific category, use the `make` command followed by the target name. For example:
-
-- To display **CPU statistics**:
+- To find out how to run, use:
 
   ```bash
-  make run_cpu
+  make help
   ```
 
