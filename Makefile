@@ -85,4 +85,20 @@ run_mem_ctrl_balance:
 	else \
 		python3 main.py $(FILES) --category mem_ctrl_balance; \
 	fi
+	
+run_all:
+	@if [ -z "$(FILES)" ]; then \
+		echo "Error: Missing required argument FILES."; \
+		echo "Usage: make run_all FILES='<file_paths>'"; \
+	else \
+		$(MAKE) run_cpu FILES="$(FILES)"; \
+		$(MAKE) run_lsq FILES="$(FILES)"; \
+		$(MAKE) run_fu FILES="$(FILES)"; \
+		$(MAKE) run_cache FILES="$(FILES)"; \
+		$(MAKE) run_bp FILES="$(FILES)"; \
+		$(MAKE) run_mem_ctrl FILES="$(FILES)"; \
+		$(MAKE) run_mem_ctrl_balance FILES="$(FILES)"; \
+	fi
+	
+	
 

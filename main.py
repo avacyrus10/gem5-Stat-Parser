@@ -4,8 +4,7 @@ from tabulate import tabulate
 from colorama import Fore, Style, init
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
-
-init()
+import xlsxwriter
 
 init()
 
@@ -196,81 +195,84 @@ def extract_cpu_statistics(file_path, active_cpu):
     stats['mem_ctrl_data'] = mem_ctrl_data
     return stats
 
-def save_to_excel(stats_list, file_labels, category, rows_general, rows_ipc_cpi=None, headers_general=None, headers_ipc_cpi=None):
-    wb = Workbook()
 
-    ws_general = wb.active
-    ws_general.title = f"{category}_general"
-    ws_general.append(headers_general)
+def filter_non_zero_rows(rows):
+    """
+    Filters out rows where all values (except the first label column) are zero.
+    """
+    return [row for row in rows if any(value != 'N/A' and value != 0 for value in row[1:])]
 
-    for row in rows_general:
-        ws_general.append(row)
 
-    for row_idx, row_data in enumerate(rows_general, start=2):
-        chart = BarChart()
-        data = Reference(ws_general, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-        categories = Reference(ws_general, min_col=1, min_row=row_idx, max_row=row_idx)
-        chart.add_data(data, titles_from_data=False)
-        chart.set_categories(categories)
-        chart.title = f"{row_data[0]} Statistics"
-        ws_general.add_chart(chart, f"E{row_idx * 5}")
-
-    if rows_ipc_cpi and headers_ipc_cpi:
-        ws_ipc_cpi = wb.create_sheet(title=f"{category}_ipc_cpi")
-        ws_ipc_cpi.append(headers_ipc_cpi)
-
-        for row in rows_ipc_cpi:
-            ws_ipc_cpi.append(row)
-
-        for row_idx, row_data in enumerate(rows_ipc_cpi, start=2):
-            chart = BarChart()
-            data = Reference(ws_ipc_cpi, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-            categories = Reference(ws_ipc_cpi, min_col=1, min_row=row_idx, max_row=row_idx)
-            chart.add_data(data, titles_from_data=False)
-            chart.set_categories(categories)
-            chart.title = f"{row_data[0]} Statistics"
-            ws_ipc_cpi.add_chart(chart, f"E{row_idx * 5}")
-
-    wb.save(f"{category}_statistics.xlsx")
-
-def save_to_excel(stats_list, file_labels, category, rows_general, rows_ipc_cpi=None, headers_general=None,
+def save_to_excel(stats_list, file_labels, category, mem_ctrl_table, rows_ipc_cpi=None, headers_general=None,
                   headers_ipc_cpi=None):
+    file_name = f"{category}_statistics.xlsx"
+    workbook = xlsxwriter.Workbook(file_name)
 
-    wb = Workbook()
+    worksheet_general = workbook.add_worksheet(f"{category}_general")
+    worksheet_general.write_row(0, 0, headers_general)
 
-    ws_general = wb.active
-    ws_general.title = f"{category}_general"
-    ws_general.append(headers_general)
+    for row_idx, row in enumerate(mem_ctrl_table, start=1):
+        worksheet_general.write_row(row_idx, 0, row)
 
-    for row in rows_general:
-        ws_general.append(row)
+    if category == "mem_ctrl":
+        num_metrics = 4
+        for idx, row_data in enumerate(mem_ctrl_table, start=1):
+            if row_data[0].startswith("Memory Controller"):
+                chart = workbook.add_chart({'type': 'column'})
+                mem_ctrl_name = row_data[0]
 
-    for row_idx, row_data in enumerate(rows_general, start=2):
-        chart = BarChart()
-        data = Reference(ws_general, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-        categories = Reference(ws_general, min_col=1, min_row=row_idx, max_row=row_idx)
-        chart.add_data(data, titles_from_data=False)
-        chart.set_categories(categories)
-        chart.title = f"{row_data[0]} Statistics"
-        ws_general.add_chart(chart, f"E{row_idx * 5}")
+                for metric_idx in range(num_metrics):
+                    for file_idx, file_label in enumerate(file_labels):
+                        col = 1 + (file_idx * num_metrics) + metric_idx
+                        metric_name = headers_general[col]
+                        chart.add_series({
+                            'name': f"{file_label} {metric_name}",
+                            'categories': [f"{category}_general", idx, 0, idx, 0],
+                            'values': [f"{category}_general", idx, col, idx, col],
+                        })
 
-    if rows_ipc_cpi and headers_ipc_cpi:
-        ws_ipc_cpi = wb.create_sheet(title=f"{category}_ipc_cpi")
-        ws_ipc_cpi.append(headers_ipc_cpi)
+                chart.set_title({'name': f"{mem_ctrl_name} Statistics"})
+                chart.set_x_axis({'name': 'Metric'})
+                chart.set_y_axis({'name': 'Value'})
+                chart.set_legend({'position': 'right'})
 
-        for row in rows_ipc_cpi:
-            ws_ipc_cpi.append(row)
+                worksheet_general.insert_chart(f"E{idx * 10}", chart)
 
-        for row_idx, row_data in enumerate(rows_ipc_cpi, start=2):
-            chart = BarChart()
-            data = Reference(ws_ipc_cpi, min_col=2, min_row=row_idx, max_col=len(file_labels) + 1, max_row=row_idx)
-            categories = Reference(ws_ipc_cpi, min_col=1, min_row=row_idx, max_row=row_idx)
-            chart.add_data(data, titles_from_data=False)
-            chart.set_categories(categories)
-            chart.title = f"{row_data[0]} Statistics"
-            ws_ipc_cpi.add_chart(chart, f"E{row_idx * 5}")
+    # TODO: this part needs to be fixed.
+    elif category == "mem_ctrl_balance":
+        try:
+            read_share_col = headers_general.index("Read % Share")
+            write_share_col = headers_general.index("Write % Share")
+            print(f"Read % Share Column Index: {read_share_col}, Write % Share Column Index: {write_share_col}")
+        except ValueError as e:
+            print("Error finding columns for 'Read % Share' or 'Write % Share':", e)
+            workbook.close()
+            return
 
-    wb.save(f"{category}_statistics.xlsx")
+        for file_idx, file_label in enumerate(file_labels):
+            read_pie_chart = workbook.add_chart({'type': 'pie'})
+            read_pie_chart.set_title({'name': f"{file_label} Read Share Distribution"})
+            read_pie_chart.add_series({
+                'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xlsxwriter.utility.xl_col_to_name(read_share_col)}2:" \
+                          f"{xlsxwriter.utility.xl_col_to_name(read_share_col)}{len(mem_ctrl_table) + 1}",
+                'data_labels': {'percentage': True}
+            })
+
+            worksheet_general.insert_chart(f"E{file_idx * 20 + 1}", read_pie_chart)
+
+            write_pie_chart = workbook.add_chart({'type': 'pie'})
+            write_pie_chart.set_title({'name': f"{file_label} Write Share Distribution"})
+            write_pie_chart.add_series({
+                'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xlsxwriter.utility.xl_col_to_name(write_share_col)}2:" \
+                          f"{xlsxwriter.utility.xl_col_to_name(write_share_col)}{len(mem_ctrl_table) + 1}",
+                'data_labels': {'percentage': True}
+            })
+            worksheet_general.insert_chart(f"E{(file_idx * 20) + 15}", write_pie_chart)
+
+    workbook.close()
+    print(f"Excel file saved as {file_name}")
 
 
 def display_statistics(stats_list, file_labels, category):
@@ -312,14 +314,24 @@ def display_statistics(stats_list, file_labels, category):
         print(tabulate(rows, headers=headers, tablefmt="grid"))
         save_to_excel(stats_list, file_labels, category, rows, [], headers, [])
 
+
     elif category == "fu":
+
         headers_fu = ["Functional Unit"] + file_labels
+
         rows = []
+
         for fu_type in stats_list[0].get('FU_Busy', {}):
-            row = [fu_type] + [stats.get('FU_Busy', {}).get(fu_type, {}).get('count', 'N/A') for stats in stats_list]
+            row = [fu_type] + [stats.get('FU_Busy', {}).get(fu_type, {}).get('count', 0) for stats in stats_list]
+
             rows.append(row)
+
+        rows = filter_non_zero_rows(rows)
+
         print(tabulate(rows, headers=headers_fu, tablefmt="grid"))
+
         save_to_excel(stats_list, file_labels, category, rows, [], headers_fu, [])
+
 
     elif category == "cache":
         rows = [
@@ -340,20 +352,49 @@ def display_statistics(stats_list, file_labels, category):
         print(tabulate(rows, headers=headers, tablefmt="grid"))
         save_to_excel(stats_list, file_labels, category, rows, [], headers, [])
 
+
     elif category == "mem_ctrl":
+
         mem_ctrl_table = []
-        for idx, stats in enumerate(stats_list, start=1):
-            for mem_ctrl_id, mem_ctrl in stats['mem_ctrl_data'].items():
-                mem_ctrl_table.append([
-                    f"Memory Controller {mem_ctrl_id}",
+
+        headers_mem_ctrl = ["Memory Controller"]
+
+        for file_label in file_labels:
+            headers_mem_ctrl.extend(
+                [f"{file_label} Read Bandwidth (Bytes/s)", f"{file_label} Write Bandwidth (Bytes/s)",
+
+                 f"{file_label} Read Bursts", f"{file_label} Write Bursts"])
+
+        mem_ctrl_ids = set()
+
+        for stats in stats_list:
+            mem_ctrl_ids.update(stats['mem_ctrl_data'].keys())
+
+        for mem_ctrl_id in sorted(mem_ctrl_ids):
+
+            row = [f"Memory Controller {mem_ctrl_id}"]
+
+            for stats in stats_list:
+                mem_ctrl = stats['mem_ctrl_data'].get(mem_ctrl_id, {})
+
+                row.extend([
+
                     mem_ctrl.get('bw_read', 'N/A'),
+
                     mem_ctrl.get('bw_write', 'N/A'),
+
                     mem_ctrl.get('read_bursts', 'N/A'),
+
                     mem_ctrl.get('write_bursts', 'N/A')
+
                 ])
-        headers_mem_ctrl = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)", "Read Bursts", "Write Bursts"]
+
+            mem_ctrl_table.append(row)
+
         print(tabulate(mem_ctrl_table, headers=headers_mem_ctrl, tablefmt="grid"))
+
         save_to_excel(stats_list, file_labels, category, mem_ctrl_table, [], headers_mem_ctrl, [])
+
 
     elif category == "mem_ctrl_balance":
         mem_ctrl_balance_table = []
@@ -370,7 +411,8 @@ def display_statistics(stats_list, file_labels, category):
                     f"{mem_ctrl.get('read_share', 0):.2f}%",
                     f"{mem_ctrl.get('write_share', 0):.2f}%"
                 ])
-        headers_mem_ctrl_balance = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)", "Read Bursts",
+        headers_mem_ctrl_balance = ["Memory Controller", "Read Bandwidth (Bytes/s)", "Write Bandwidth (Bytes/s)",
+                                    "Read Bursts",
                                     "Write Bursts", "Queue Latency", "Total Accesses", "Read % Share", "Write % Share"]
         print(tabulate(mem_ctrl_balance_table, headers=headers_mem_ctrl_balance, tablefmt="grid"))
         save_to_excel(stats_list, file_labels, category, mem_ctrl_balance_table, [], headers_mem_ctrl_balance, [])
@@ -398,6 +440,6 @@ def main():
 
     display_statistics(stats_list, file_labels, args.category)
 
+
 if __name__ == "__main__":
     main()
-
