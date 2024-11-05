@@ -5,6 +5,8 @@ from colorama import Fore, Style, init
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, Reference
 import xlsxwriter
+import xlsxwriter
+from xlsxwriter.utility import xl_col_to_name
 
 init()
 
@@ -202,7 +204,6 @@ def filter_non_zero_rows(rows):
     """
     return [row for row in rows if any(value != 'N/A' and value != 0 for value in row[1:])]
 
-
 def save_to_excel(stats_list, file_labels, category, mem_ctrl_table, rows_ipc_cpi=None, headers_general=None,
                   headers_ipc_cpi=None):
     file_name = f"{category}_statistics.xlsx"
@@ -214,7 +215,115 @@ def save_to_excel(stats_list, file_labels, category, mem_ctrl_table, rows_ipc_cp
     for row_idx, row in enumerate(mem_ctrl_table, start=1):
         worksheet_general.write_row(row_idx, 0, row)
 
-    if category == "mem_ctrl":
+    if category == "cpu":
+        worksheet_general.write_row(0, 0, headers_general)
+
+        for row_idx, row in enumerate(mem_ctrl_table, start=1):
+            worksheet_general.write_row(row_idx, 0, row)
+
+        general_chart = workbook.add_chart({'type': 'column'})
+        for i, file_label in enumerate(file_labels):
+            general_chart.add_series({
+                'name': file_label,
+                'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xl_col_to_name(i + 1)}2:" \
+                          f"{xl_col_to_name(i + 1)}{len(mem_ctrl_table) + 1}",
+            })
+
+        general_chart.set_title({'name': 'CPU General Statistics'})
+        general_chart.set_x_axis({'name': 'Metrics'})
+        general_chart.set_y_axis({'name': 'Value'})
+        worksheet_general.insert_chart('E2', general_chart)
+
+        worksheet_ipc_cpi = workbook.add_worksheet(f"{category}_ipc_cpi")
+        worksheet_ipc_cpi.write_row(0, 0, headers_ipc_cpi)
+
+        for row_idx, row in enumerate(rows_ipc_cpi, start=1):
+            worksheet_ipc_cpi.write_row(row_idx, 0, row)
+
+        ipc_cpi_chart = workbook.add_chart({'type': 'column'})
+        for i, file_label in enumerate(file_labels):
+            ipc_cpi_chart.add_series({
+                'name': file_label,
+                'categories': f"'{category}_ipc_cpi'!A2:A{len(rows_ipc_cpi) + 1}",
+                'values': f"'{category}_ipc_cpi'!{xl_col_to_name(i + 1)}2:" \
+                          f"{xl_col_to_name(i + 1)}{len(rows_ipc_cpi) + 1}",
+            })
+
+        ipc_cpi_chart.set_title({'name': 'CPU IPC and CPI Statistics'})
+        ipc_cpi_chart.set_x_axis({'name': 'Metrics (CPI, IPC)'})
+        ipc_cpi_chart.set_y_axis({'name': 'Value'})
+        worksheet_ipc_cpi.insert_chart('E2', ipc_cpi_chart)
+
+    elif category == "lsq":
+        for row_idx, row in enumerate(mem_ctrl_table, start=1):
+            worksheet_general.write_row(row_idx, 0, row)
+
+            chart = workbook.add_chart({'type': 'column'})
+            for i, file_label in enumerate(file_labels):
+                chart.add_series({
+                    'name': file_label,
+                    'categories': f"'{category}_general'!A{row_idx + 1}",
+                    'values': f"'{category}_general'!{xl_col_to_name(i + 1)}{row_idx + 1}",
+                })
+            chart.set_title({'name': f'{row[0]} Statistics'})
+            chart.set_x_axis({'name': 'Files'})
+            chart.set_y_axis({'name': 'Value'})
+            worksheet_general.insert_chart(f"E{row_idx * 10}", chart)
+
+    elif category == "fu":
+        for row_idx, row in enumerate(mem_ctrl_table, start=1):
+            worksheet_general.write_row(row_idx, 0, row)
+
+        chart = workbook.add_chart({'type': 'column'})
+        for i, file_label in enumerate(file_labels):
+            chart.add_series({
+                'name': file_label,
+                'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xl_col_to_name(i + 1)}2:" \
+                          f"{xl_col_to_name(i + 1)}{len(mem_ctrl_table) + 1}",
+            })
+
+        chart.set_title({'name': 'Functional Unit Usage'})
+        chart.set_x_axis({'name': 'Functional Units'})
+        chart.set_y_axis({'name': 'Usage Count'})
+        worksheet_general.insert_chart('E2', chart)
+
+    elif category == "cache":
+        for row_idx, row in enumerate(mem_ctrl_table, start=1):
+            worksheet_general.write_row(row_idx, 0, row)
+
+            chart = workbook.add_chart({'type': 'column'})
+            for i, file_label in enumerate(file_labels):
+                chart.add_series({
+                    'name': file_label,
+                    'categories': f"'{category}_general'!A{row_idx + 1}",
+                    'values': f"'{category}_general'!{xl_col_to_name(i + 1)}{row_idx + 1}",
+                })
+            chart.set_title({'name': f'{row[0]} Cache Statistics'})
+            chart.set_x_axis({'name': 'Files'})
+            chart.set_y_axis({'name': 'Value'})
+            worksheet_general.insert_chart(f"E{row_idx * 10}", chart)
+
+    elif category == "bp":
+        for row_idx, row in enumerate(mem_ctrl_table, start=1):
+            worksheet_general.write_row(row_idx, 0, row)
+
+        chart = workbook.add_chart({'type': 'column'})
+        for i, file_label in enumerate(file_labels):
+            chart.add_series({
+                'name': file_label,
+                'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xl_col_to_name(i + 1)}2:" \
+                          f"{xl_col_to_name(i + 1)}{len(mem_ctrl_table) + 1}",
+            })
+
+        chart.set_title({'name': 'Branch Prediction Statistics'})
+        chart.set_x_axis({'name': 'Metrics'})
+        chart.set_y_axis({'name': 'Value'})
+        worksheet_general.insert_chart('E2', chart)
+
+    elif category == "mem_ctrl":
         num_metrics = 4
         for idx, row_data in enumerate(mem_ctrl_table, start=1):
             if row_data[0].startswith("Memory Controller"):
@@ -237,8 +346,7 @@ def save_to_excel(stats_list, file_labels, category, mem_ctrl_table, rows_ipc_cp
                 chart.set_legend({'position': 'right'})
 
                 worksheet_general.insert_chart(f"E{idx * 10}", chart)
-
-    # TODO: this part needs to be fixed.
+    #TODO: add piecharts.
     elif category == "mem_ctrl_balance":
         try:
             read_share_col = headers_general.index("Read % Share")
@@ -254,25 +362,25 @@ def save_to_excel(stats_list, file_labels, category, mem_ctrl_table, rows_ipc_cp
             read_pie_chart.set_title({'name': f"{file_label} Read Share Distribution"})
             read_pie_chart.add_series({
                 'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
-                'values': f"'{category}_general'!{xlsxwriter.utility.xl_col_to_name(read_share_col)}2:" \
-                          f"{xlsxwriter.utility.xl_col_to_name(read_share_col)}{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xl_col_to_name(read_share_col)}2:" \
+                          f"{xl_col_to_name(read_share_col)}{len(mem_ctrl_table) + 1}",
                 'data_labels': {'percentage': True}
             })
-
             worksheet_general.insert_chart(f"E{file_idx * 20 + 1}", read_pie_chart)
 
             write_pie_chart = workbook.add_chart({'type': 'pie'})
             write_pie_chart.set_title({'name': f"{file_label} Write Share Distribution"})
             write_pie_chart.add_series({
                 'categories': f"'{category}_general'!A2:A{len(mem_ctrl_table) + 1}",
-                'values': f"'{category}_general'!{xlsxwriter.utility.xl_col_to_name(write_share_col)}2:" \
-                          f"{xlsxwriter.utility.xl_col_to_name(write_share_col)}{len(mem_ctrl_table) + 1}",
+                'values': f"'{category}_general'!{xl_col_to_name(write_share_col)}2:" \
+                          f"{xl_col_to_name(write_share_col)}{len(mem_ctrl_table) + 1}",
                 'data_labels': {'percentage': True}
             })
             worksheet_general.insert_chart(f"E{(file_idx * 20) + 15}", write_pie_chart)
 
     workbook.close()
     print(f"Excel file saved as {file_name}")
+
 
 
 def display_statistics(stats_list, file_labels, category):
